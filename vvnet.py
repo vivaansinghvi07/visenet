@@ -97,7 +97,7 @@ def VVNet(*, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
     model_layer = Conv2Plus1D(1, 1, activation="sigmoid")(model_layer)
 
     model = Model(inputs=input_layer, outputs=model_layer)
-    model.compile(optimizer=Adam(learning_rate=learning_rate), loss=BinaryCrossentropy())
+    model.compile(optimizer=Adam(learning_rate=learning_rate), loss=BinaryCrossentropy(), metrics=["accuracy"])
 
     if pretrained_weights:
         model.load_weights(pretrained_weights)
