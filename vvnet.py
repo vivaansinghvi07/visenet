@@ -3,7 +3,7 @@ from tensorflow.keras import Sequential, Model
 from tensorflow.keras.losses import BinaryCrossentropy
 from tensorflow.keras.layers import Conv3D, MaxPooling3D, Input, Layer, Dropout, UpSampling3D, concatenate
 
-INPUT_SHAPE = (128, 256, 256, 3)
+INPUT_SHAPE = (32, 128, 128, 3)
 
 
 class Conv2Plus1D(Layer):
@@ -42,8 +42,69 @@ class Conv2Plus1D(Layer):
         return self.seqeuence(x)
 
 
-def VVNet(pretrained_weights=None):
-    in1 = Input(INPUT_SHAPE)
+def VVNet(*, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
+
+    """
+    Start at 64, multiply by factor of two per iteration of the downwards step.
+    Then, go backwards, ending at 1.
+
+    With depth 4:
+    64 >> 128 >> 256 >> 512 >> 256 >> 128 >> 64 >> 1
+
+    With depth 2:
+    64 >> 128 >> 64 >> 1
+    """
+
+    input_layer = Input(INPUT_SHAPE)
+    concat_layers = []
+
+    # load downwards steps for the model
+    for i in range(vdepth - 1):
+
+        # add convolutional steps
+        if i == 0:
+            model_layer = Conv2Plus1D(64 * (2**i), 3, activation="relu", padding="same", kernel_initializer="he_normal")(input_layer)
+        else:
+            model_layer = Conv2Plus1D(64 * (2**i), 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+        model_layer = Conv2Plus1D(64 * (2**i), 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+
+        # add an extra dropout layer if right before end
+        if i == vdepth - 2:
+            model_layer = Dropout(0.5)(model_layer)
+        concat_layers.append(model_layer)
+
+        # perform pooling and go downwards
+        model_layer = MaxPooling3D(pool_size=(2, 2, 2))(model_layer)
+
+    # add the bottom step, when 3, vdepth should be 64 * 4 = 256
+    model_layer = Conv2Plus1D(64 * (2**(vdepth-1)), 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+    model_layer = Conv2Plus1D(64 * (2**(vdepth-1)), 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+    model_layer = Dropout(0.5)(model_layer)
+
+    # upwards steps 
+    for i in range(vdepth - 2, -1, -1):
+
+        # perform the upwards step
+        model_layer = UpSampling3D(size=(2, 2, 2))(model_layer)
+        model_layer = Conv2Plus1D(64 * (2**i), 2, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+        model_layer = concatenate([model_layer, concat_layers.pop()], axis=4)
+        model_layer = Conv2Plus1D(64 * (2**i), 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+        model_layer = Conv2Plus1D(64 * (2**i), 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+
+    
+    # finally, get everything in the output format
+    model_layer = Conv2Plus1D(2, 3, activation="relu", padding="same", kernel_initializer="he_normal")(model_layer)
+    model_layer = Conv2Plus1D(1, 1, activation="sigmoid")(model_layer)
+
+    model = Model(inputs=input_layer, outputs=model_layer)
+    model.compile(optimizer=Adam(learning_rate=learning_rate), loss=BinaryCrossentropy())
+
+    if pretrained_weights:
+        model.load_weights(pretrained_weights)
+
+    return model
+
+    in1 = Input(INPUT_SHAPE)    
 
     conv1 = Conv2Plus1D(64, 3, activation="relu", padding="same", kernel_initializer="he_normal")(in1)
     conv1 = Conv2Plus1D(64, 3, activation="relu", padding="same", kernel_initializer="he_normal")(conv1)
