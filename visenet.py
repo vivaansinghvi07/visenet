@@ -76,7 +76,7 @@ class Conv2Plus1D(Layer):
         return self.seqeuence(x)
 
 
-def VVNet(*, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
+def ViSeNet(*, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
     """
     Start at 64, multiply by factor of two per iteration of the downwards step.
     Then, go backwards, ending at 1.
