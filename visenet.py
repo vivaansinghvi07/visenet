@@ -18,18 +18,6 @@ INPUT_SHAPE = (32, 128, 128, 3)
 
 # https://stackoverflow.com/questions/73352641/my-unet-model-produces-an-all-gray-picture
 def weighted_bincrossentropy(true, pred, weight_zero=0.10, weight_one=1):
-    """
-    Calculates weighted binary cross entropy. The weights are fixed.
-
-    This can be useful for unbalanced catagories.
-
-    Adjust the weights here depending on what is required.
-
-    For example if there are 10x as many positive classes as negative classes,
-        if you adjust weight_zero = 1.0, weight_one = 0.1, then false positives
-        will be penalize 10 times as much as false negatives.
-    """
-
     # calculate the binary cross entropy
     bin_crossentropy = binary_crossentropy(true, pred)
 
@@ -41,34 +29,14 @@ def weighted_bincrossentropy(true, pred, weight_zero=0.10, weight_one=1):
 
 
 class Conv2Plus1D(Layer):
-    def __init__(
-        self,
-        filters: int,
-        kernel_size: int | tuple[int],
-        *,
-        padding: str = "valid",
-        activation: str = None,
-        kernel_initializer: str = "glorot_uniform"
-    ) -> None:
+    def __init__(self, filters: int, kernel_size: int | tuple[int], **kwargs) -> None:
         super().__init__()
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,) * 3
         self.seqeuence = Sequential(
             [
-                Conv3D(
-                    filters,
-                    (1, *kernel_size[1:]),
-                    padding=padding,
-                    activation=activation,
-                    kernel_initializer=kernel_initializer,
-                ),
-                Conv3D(
-                    filters,
-                    (kernel_size[0], 1, 1),
-                    padding=padding,
-                    activation=activation,
-                    kernel_initializer=kernel_initializer,
-                ),
+                Conv3D(filters, (1, *kernel_size[1:]), **kwargs),
+                Conv3D(filters, (kernel_size[0], 1, 1), **kwargs),
             ]
         )
 
@@ -76,7 +44,7 @@ class Conv2Plus1D(Layer):
         return self.seqeuence(x)
 
 
-def ViSeNet(*, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
+def ViSeNet(input_shape=INPUT_SHAPE, *, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
     """
     Start at 64, multiply by factor of two per iteration of the downwards step.
     Then, go backwards, ending at 1.
@@ -88,7 +56,7 @@ def ViSeNet(*, vdepth=3, pretrained_weights=None, learning_rate=5e-4):
     64 >> 128 >> 64 >> 1
     """
 
-    input_layer = Input(INPUT_SHAPE)
+    input_layer = Input(input_shape)
     concat_layers = []
 
     # load downwards steps for the model
